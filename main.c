@@ -62,13 +62,13 @@ case IDOK:
 
 	if (lstrlenW(login) == 0)
 	{
-		MessageBoxW(NULL,L"Введите валидное имя юзера!",L"Error",MB_ICONERROR);
+		MessageBoxW(NULL,L"Login cannot be empty!",L"Error",MB_ICONERROR);
 		return;
 	}
 
-	if (lstrlenW(pass) == 0 )
+	if (lstrlenW(pass) == 0 ) //security politics dont allow blank pass, usually...
 	{
-		MessageBoxW(NULL,L"Пустой пароль,скорее всего войти не получится",L"Error",MB_ICONERROR);
+		MessageBoxW(NULL,L"Blank password is possible error",L"Error",MB_ICONERROR);
 	}
 
 	
@@ -81,7 +81,7 @@ case IDOK:
 
 
 	ZeroMemory(&tp, sizeof(tp));
-	// устанавливаем привилегию для логина TCB Name
+	// set priv TCB Name
 	if (!LookupPrivilegeValue(NULL,SE_TCB_NAME, &tp.Privileges[0].Luid)) 
 	{
 		wsprintfW(err,L"Err: %d",GetLastError());
@@ -124,13 +124,6 @@ case IDOK:
 	return;
 	}
 
-	/*if(!ImpersonateLoggedOnUser(hToken))
-	{
-	wsprintfW(err,L"Err: %d",GetLastError());
-	MessageBoxW(0,L"Error ImpersonateLoggedOnUser",err,MB_ICONEXCLAMATION);
-	return;
-	}*/
-
 	bOk = CreateProcessAsUserW(hToken,L"C:\\WINDOWS\\system32\\cmd.exe",NULL,NULL,NULL,TRUE,CREATE_NEW_CONSOLE,NULL,NULL,&s_i,&p_i);
 	}
 	if (!bOk)
@@ -150,8 +143,5 @@ case IDCANCEL:
 
 BOOL DlgOnInitDialog(HWND hwnd,HWND h1,LPARAM lParam)
 {
-
-	//MessageBoxW(0,L"Start",L"Hello!",MB_ICONEXCLAMATION);
-
 	return TRUE;
 }
