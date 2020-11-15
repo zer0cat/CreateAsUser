@@ -7,6 +7,35 @@ void DlgOnCommand(HWND ,int ,HWND,UINT);
 BOOL DlgOnInitDialog(HWND ,HWND,LPARAM);
 
 
+BOOL EnableWindowsPrivilege(WCHAR* Privilege)
+{
+LUID luid = {0};
+TOKEN_PRIVILEGES tp;
+HANDLE currentToken,currentProcess = GetCurrentProcess();
+
+tp.PrivilegeCount = 1;
+tp.Privileges[0].Luid = luid;
+tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+	if (!LookupPrivilegeValueW(NULL, Privilege, &luid)) 
+		{
+		wprintf(L"LookupPrivilegeValue failed %d\n",GetLastError());
+		return FALSE;
+		}
+	if (!OpenProcessToken(currentProcess, TOKEN_ALL_ACCESS, &currentToken)) 		
+		{
+		wprintf(L"OpenProcessToken for priv8 failed %d\n",GetLastError());
+		return FALSE;
+		}
+	if (!AdjustTokenPrivileges(currentToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), (PTOKEN_PRIVILEGES)NULL, (PDWORD)NULL)) 
+		{
+		wprintf(L"AdjustTokenPrivileges failed %d\n",GetLastError());		
+		return FALSE;
+		}
+	return TRUE;
+}
+
+
+
 BOOL isVistaPlus(void)
 {
 OSVERSIONINFOW osv;
@@ -51,7 +80,6 @@ HANDLE hToken;
 BOOL bOk;
 STARTUPINFOW s_i;
 PROCESS_INFORMATION p_i;
-TOKEN_PRIVILEGES tp;
 
 switch(id)
 {
@@ -62,74 +90,58 @@ case IDOK:
 
 	if (lstrlenW(login) == 0)
 	{
-		MessageBoxW(NULL,L"Login cannot be empty!",L"Error",MB_ICONERROR);
+		MessageBoxW(NULL,L"¬ведите валидное им¤ юзера!",L"Error",MB_ICONERROR);
 		return;
 	}
 
-	if (lstrlenW(pass) == 0 ) //security politics dont allow blank pass, usually...
+	if (lstrlenW(pass) == 0 )
 	{
-		MessageBoxW(NULL,L"Blank password is possible error",L"Error",MB_ICONERROR);
+		MessageBoxW(NULL,L"ѕустой пароль,скорее всего войти не получитс¤",L"Error",MB_ICONERROR);
 	}
 
-	
-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES , &hToken))
-	{
+	// устанавливаем привилегию дл¤ логина TCB Name
+	if (!EnableWindowsPrivilege(L"SeTcbPrivilege"))
+		{
 		wsprintfW(err,L"Err: %d",GetLastError());
-		MessageBoxW(0,L"Error GetCurrentProcess",err,MB_ICONEXCLAMATION);
-	return;
-	}
+		MessageBoxW(0,L"Error Setting TcbPrivilege!",err,MB_ICONEXCLAMATION);
+		return;
+		}
 
 
-	ZeroMemory(&tp, sizeof(tp));
-	// set priv TCB Name
-	if (!LookupPrivilegeValue(NULL,SE_TCB_NAME, &tp.Privileges[0].Luid)) 
-	{
-		wsprintfW(err,L"Err: %d",GetLastError());
-		MessageBoxW(0,L"Error LookupPrivilegeValue",err,MB_ICONEXCLAMATION);
-	return;
-	}
-	tp.PrivilegeCount = 1;
-	tp.Privileges[0].Attributes =  SE_PRIVILEGE_ENABLED;//SE_PRIVILEGE_ENABLED;
-	if (!AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, 0)) 
-	{
-		wsprintfW(err,L"Err: %d",GetLastError());
-		MessageBoxW(0,L"Error AdjustTokenPrivileges",err,MB_ICONEXCLAMATION);
-	return;
-	}
-	
 
 	ZeroMemory(&s_i,sizeof(STARTUPINFOW));
 	s_i.cb = sizeof(STARTUPINFOW);
 	s_i.lpDesktop = 0;
 
-	if (isVistaPlus())
-	{
+goto X;	
+
 	bOk = CreateProcessWithLogonW(login,domain,(lstrlenW(pass) == 0) ? NULL : pass,LOGON_WITH_PROFILE,\
 					L"C:\\WINDOWS\\system32\\cmd.exe",0,CREATE_NEW_CONSOLE,NULL,NULL,&s_i,&p_i);
+		if (!bOk)
+		{
+			wsprintfW(err,L"Err: %d",GetLastError());
+			MessageBoxW(0,L"Error CreateProcessWithLogonW",err,MB_ICONEXCLAMATION);
+			return;
+		}
+
+X:
+/* этот код  работает сугубо от системы, потому что не хватает какой-то привилегии. Еще можно юзать CreateProcessWithTokenW*/
+	bOk = LogonUserW(login,domain, (lstrlenW(pass) == 0) ? NULL : pass,LOGON32_LOGON_INTERACTIVE,LOGON32_PROVIDER_DEFAULT,&hToken);
 	if (!bOk)
-	{
+		{
 		wsprintfW(err,L"Err: %d",GetLastError());
-		MessageBoxW(0,L"Error CreateProcessWithLogonW",err,MB_ICONEXCLAMATION);
+		MessageBoxW(0,L"Error logonuser",err,MB_ICONEXCLAMATION);
 		return;
-	}
-	}
-	else
-	{
-	
-	bOk = LogonUserW(login,L".", (lstrlenW(pass) == 0) ? NULL : pass,LOGON32_LOGON_INTERACTIVE,LOGON32_PROVIDER_DEFAULT,&hToken);
-	if (!bOk)
-	{
-	wsprintfW(err,L"Err: %d",GetLastError());
-	MessageBoxW(0,L"Error logonuser",err,MB_ICONEXCLAMATION);
-	return;
-	}
+		}
+
 
 	bOk = CreateProcessAsUserW(hToken,L"C:\\WINDOWS\\system32\\cmd.exe",NULL,NULL,NULL,TRUE,CREATE_NEW_CONSOLE,NULL,NULL,&s_i,&p_i);
-	}
+
 	if (!bOk)
 	{
 		wsprintfW(err,L"Err: %d",GetLastError());
 		MessageBoxW(0,L"Error CreateProcessAsUserW",err,MB_ICONEXCLAMATION);
+		
 		return;
 	}
 	break;
@@ -143,5 +155,8 @@ case IDCANCEL:
 
 BOOL DlgOnInitDialog(HWND hwnd,HWND h1,LPARAM lParam)
 {
+
+	//MessageBoxW(0,L"Start",L"Hello!",MB_ICONEXCLAMATION);
+
 	return TRUE;
 }
